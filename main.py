@@ -1,4 +1,4 @@
-import itertools, os, statistics, time
+import itertools, os, time
 from multiprocessing import Pool, freeze_support
 
 import pandas as pd
@@ -101,18 +101,23 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
               sep=os.linesep)
 
     true_positives, true_negatives, false_positives, false_negatives, correct_hits = 0, 0, 0, 0, 0
+    confidence_store = {}
     for row in test_set.itertuples():
 
         good_result = str(getattr(row, predict_feature))
-        predictions = []
+        predictions = {}
 
         # Making this run in parallel with the above Pool seemed to paradoxically make the program slower.
         # I assume this is because predicting is actually very light on operations (just going down a tree) which makes the overhead of creating a process not worth it
         for tree in random_forest:
-            predictions.append(tree.predict(row))
+            prediction = str(tree.predict(row))
+            if prediction in predictions:
+                predictions[prediction] += 1
+            else:
+                predictions[prediction] = 1
 
         # After speaking to my thesis' advisor, we decided to make the predictions the majority class.
-        final_prediction = str(statistics.mode(predictions))
+        final_prediction = max(predictions, key=predictions.get)
 
         # Python 3.8 doesn't have pattern matching so this looks very good yep
         if final_prediction == good_result:
@@ -126,7 +131,14 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
         elif final_prediction == negative_value and good_result == positive_value:
             false_negatives += 1
 
-        print(f"Predicted {final_prediction} for sample {getattr(row, 'Index')}, true value was {good_result}")
+        print(f"Predicted {final_prediction} for sample {getattr(row, 'Index')}, true value was {good_result}",
+              f"Prediction by tree was:",
+              os.linesep.join(f'{key}: {value/tree_amount:.5%}' for key,value in predictions.items()),
+              "-----",
+              sep=os.linesep)
+
+        # Store how confident we were in each prediction in a variable to print the average confidence later
+        confidence_store[getattr(row, "Index")] = predictions[final_prediction] / tree_amount
 
     # These are all different accuracy indicators. They can be seen in https://en.wikipedia.org/wiki/Sensitivity_and_specificity
     true_positive_rate = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) != 0 \
@@ -143,7 +155,7 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
 
     print(f"-----",
           f"Summary:",
-          f"{accuracy:.5%} Accuracy, {balanced_accuracy:.5%} Balanced Accuracy.",
+          f"{accuracy:.5%} Accuracy, {balanced_accuracy:.5%} Balanced Accuracy, {sum(confidence_store.values()) / len(test_set.index):.5%} Average Confidence",
           f"{true_positives} True Positives, {false_positives} False Positives, {true_negatives} True Negatives, {false_negatives} False Negatives.",
           f"{true_positive_rate:.5%} True Positive Rate, ({false_negative_rate:.5%} False Negative Rate).",
           f"{true_negative_rate:.5%} True Negative Rate, ({false_positive_rate:.5%} False Positive Rate).",

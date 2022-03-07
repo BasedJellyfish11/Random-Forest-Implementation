@@ -9,16 +9,17 @@ from pandas.api.types import is_numeric_dtype
 def gini(samples: pd.DataFrame, class_feature: str) -> float:
     """
     Calculates the Gini Impurity of a group of samples. More information can be found in Corrado Gini's Variability and Mutability (1930)
+    Formula is 1 - summation (from 1 to number of possible class values) of {values of that class / total observations}^2
 
     :param samples: Set to calculate the impurity of
     :param class_feature: Feature to be considered for the impurity calculation
     :return: A percentage for the Gini Impurity in the data.
     """
-    summatory = 0.0
+    summation = 0.0
     for value in samples[class_feature].unique():
-        summatory += (len(samples.loc[samples[class_feature] == value].index) / len(samples.index)) ** 2
+        summation += (len(samples.loc[samples[class_feature] == value].index) / len(samples.index)) ** 2
 
-    return 1 - summatory
+    return 1 - summation
 
 
 def train_numeric(samples: pd.DataFrame, feature_to_train: str, feature_to_predict: str):
