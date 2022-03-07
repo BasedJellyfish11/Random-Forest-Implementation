@@ -1,10 +1,8 @@
-import math
-import os
-import sys
-import threading
+import math, os, sys, threading
+import tkinter
 import tkinter as tk
 from pathlib import Path
-from tkinter import W, E, N, Label, Button, Entry, Radiobutton, END, Tk, PhotoImage, OptionMenu, Grid
+from tkinter import W, E, N, Label, Button, Entry, OptionMenu, Grid, Radiobutton, END, Tk, PhotoImage
 from tkinter import BooleanVar, StringVar, DoubleVar, IntVar
 from tkinter.filedialog import askopenfilename
 
@@ -16,21 +14,28 @@ import main
 class GUI:
 
     @staticmethod
-    def resource_path(relative_path):
-        """ Get absolute path to resource, works for dev and for PyInstaller """
+    def resource_path(relative_path: str):
+        """
+        Get absolute path to resource, works both for dev and for PyInstaller.
+        :param relative_path: The path of the resource relative to the python script.
+        :return: The full absolute path, in a manner that works for both frozen python and normal runtime.
+        """
         base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
         return os.path.join(base_path, relative_path)
 
     def __init__(self):
+        """
+        A simple GUI for making inputting both the data we want to test and modifying hyperparameters hassle-free for end users.
+        """
+
         self.root = Tk()
-        self.root.protocol("WM_DELETE_WINDOW",
-                           self.exit)  # We want to actually run the exit protocol on closing the GUI, instead of it just destroying the tkinter widget and leaving the main running
-        # Vanity stuff because I am vane sis
+        self.root.protocol("WM_DELETE_WINDOW", self.__exit)  # We want to actually run the exit protocol on closing the GUI, instead of it just destroying the tkinter widget and leaving the main running
         self.root.title("TFG Random Forest - Julio García")
         self.root.iconphoto(True, PhotoImage(file=GUI.resource_path("icon.png")))
 
+        row_number = 1  # Starting the row at 1 actually makes resizing not stick to the very top of the window, unlike if we start it at 0
+
         # Input variables
-        row_number = 1
         self.csv_path = None
         self.full_data = None
         self.features = []
@@ -100,12 +105,13 @@ class GUI:
         self.negative_value_menu.grid(sticky=W + E + N, row=row_number, column=2, columnspan=2, padx=10, pady=4)
         row_number += 1
 
-        self.start_button = Button(self.root, text="Start", command=self.start_button_pressed, bg="#cccccc", state="disabled")
+        self.start_button = Button(self.root, text="Start", command=self.__start_button_pressed, bg="#cccccc", state="disabled")
         self.start_button.grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10, pady=(20, 0))
         row_number += 1
 
-        Button(self.root, text="Exit", command=self.exit, bg="#cccccc").grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10, pady=(0, 10))
+        Button(self.root, text="Exit", command=self.__exit, bg="#cccccc").grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10, pady=(0, 10))
 
+        #  This makes resizing actually work evenly
         for row in range(row_number):
             Grid.rowconfigure(self.root, row, weight=1)
         for column in range(2, 4):
@@ -115,7 +121,7 @@ class GUI:
         self.root.mainloop()
 
     def __browsefunc(self):
-        """Allows the user to find a path, displays it on the pathlabel, then enables the start button"""
+        """Allows the user to find a path, displays it on the pathlabel, then enables the Parse button"""
         self.csv_path = Path(askopenfilename(filetypes=[('.csv files', '.csv')]))
         self.pathlabel.config(state="normal")
         self.pathlabel.delete(0, END)  # These two are what displays it on the pathlabel
@@ -126,7 +132,25 @@ class GUI:
         else:
             self.parse_button.config(state="disabled")
 
-    def __parsedata(self):
+    def __restore_start_state(self):
+        self.full_data = None
+        self.features = []
+
+        self.test_fraction_entry.config(state="disabled")
+        self.test_fraction.set(0.0)
+
+        self.bag_fraction_entry.config(state="disabled")
+        self.bag_fraction.set(0.0)
+
+        self.balanced_trees_button_yes.config(state="disabled")
+        self.balanced_trees_button_no.config(state="disabled")
+
+        self.tree_amount_entry.config(state="disabled")
+        self.tree_amount.set(0)
+
+        self.max_features_entry.config(state="disabled")
+        self.max_features.set(0)
+
         self.predicted_variable.set('')
         self.positive_value.set('')
         self.negative_value.set('')
@@ -136,6 +160,10 @@ class GUI:
         self.predicted_variable_menu['menu'].delete(0, 'end')
         self.positive_value_menu.config(state="disabled")
         self.negative_value_menu.config(state="disabled")
+        self.predicted_variable_menu.config(state="disabled")
+
+    def __parsedata(self):
+        self.__restore_start_state()
         try:
             self.full_data = pd.read_csv(self.csv_path)
             if self.full_data.isnull().values.any():
@@ -165,25 +193,7 @@ class GUI:
 
         except ValueError:
             print("Couldn't read the data file. Please check that it is comma separated .csv and that the path is correct.")
-            self.full_data = None
-            self.features = []
-
-            self.test_fraction_entry.config(state="disabled")
-            self.test_fraction.set(0.0)
-
-            self.bag_fraction_entry.config(state="disabled")
-            self.bag_fraction.set(0.0)
-
-            self.balanced_trees_button_yes.config(state="disabled")
-            self.balanced_trees_button_no.config(state="disabled")
-
-            self.tree_amount_entry.config(state="disabled")
-            self.tree_amount.set(0)
-
-            self.max_features_entry.config(state="disabled")
-            self.max_features.set(0)
-
-            self.predicted_variable_menu.config(state="disabled")
+            self.__restore_start_state()
 
     def __selected_feature_changed(self, *_):
         self.positive_value_menu['menu'].delete(0, 'end')
@@ -196,19 +206,24 @@ class GUI:
             self.possible_values = self.full_data[self.predicted_variable.get()].unique()
             self.positive_value.set('')
             self.negative_value.set('')
-            for feature in self.possible_values:
-                self.positive_value_menu['menu'].add_command(label=feature, command=tk._setit(self.positive_value, feature))
-                self.negative_value_menu['menu'].add_command(label=feature, command=tk._setit(self.negative_value, feature))
+            try:
+                for feature in self.possible_values:
+                    self.positive_value_menu['menu'].add_command(label=feature, command=tk._setit(self.positive_value, feature))
+                    self.negative_value_menu['menu'].add_command(label=feature, command=tk._setit(self.negative_value, feature))
+            except tkinter.TclError:
+                print("Tried too load too many values into the possible positive/negative fields, which induced a crash. Are you sure this is a categorical variable?")
+                self.__restore_start_state()
+                return
             self.positive_value_menu.config(state="normal")
             self.negative_value_menu.config(state="normal")
             self.start_button.config(state="normal")
 
-    def start_button_pressed(self):
+    def __start_button_pressed(self):
         """Starts the main loop in another thread so that the GUI does not become unresponsive"""
-        self.start_button.config(text="Running!", state="disabled")  # User feedback is important ig
-        threading.Thread(target=self.start).start()
+        self.start_button.config(text="Running!", state="disabled")  # Do not let the user try to run two different predictions at the same time that would murder so many computers
+        threading.Thread(target=self.__start).start()
 
-    def start(self):
+    def __start(self):
         try:
             main.run(self.full_data, self.test_fraction.get(), self.bag_fraction.get(), self.balanced_trees.get(),
                      self.tree_amount.get(),
@@ -220,6 +235,6 @@ class GUI:
         self.start_button.config(text="Start", state="normal")  # User feedback is important ig
 
     @staticmethod
-    def exit():
+    def __exit():
         """ Close the application"""
         sys.exit(0)  # Goodbye
