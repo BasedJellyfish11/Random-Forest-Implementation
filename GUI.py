@@ -1,8 +1,7 @@
-import math, os, sys, threading
-import tkinter
+import math, os, sys, threading, signal
 import tkinter as tk
 from pathlib import Path
-from tkinter import W, E, N, Label, Button, Entry, OptionMenu, Grid, Radiobutton, END, Tk, PhotoImage
+from tkinter import W, E, N, Label, Button, Entry, OptionMenu, Grid, Radiobutton, END, Tk, PhotoImage, TclError
 from tkinter import BooleanVar, StringVar, DoubleVar, IntVar
 from tkinter.filedialog import askopenfilename
 
@@ -210,7 +209,7 @@ class GUI:
                 for feature in self.possible_values:
                     self.positive_value_menu['menu'].add_command(label=feature, command=tk._setit(self.positive_value, feature))
                     self.negative_value_menu['menu'].add_command(label=feature, command=tk._setit(self.negative_value, feature))
-            except tkinter.TclError:
+            except TclError:
                 print("Tried too load too many values into the possible positive/negative fields, which induced a crash. Are you sure this is a categorical variable?")
                 self.__restore_start_state()
                 return
@@ -237,4 +236,4 @@ class GUI:
     @staticmethod
     def __exit():
         """ Close the application"""
-        sys.exit(0)  # Goodbye
+        os.kill(os.getpid(), signal.SIGINT)  # Goodbye
