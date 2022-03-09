@@ -128,7 +128,7 @@ class Node:
 
         group_sizes = samples.groupby(feature_to_predict).size()
         weighted_sizes = {key: group_sizes.get(key) * weight for key, weight in weights.items() if key in group_sizes}
-        self.weighted_majority_class = max(weighted_sizes, key=weighted_sizes.get)
+        self.weighted_majority_class = max(weighted_sizes, key=weighted_sizes.get) if weighted_sizes else self.majority_class
 
         self.threshold = None
         self.feature = None  # We will need to store the feature we decided to split on, not just the threshold, for when we predict

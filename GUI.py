@@ -141,7 +141,7 @@ class GUI:
         for row, value in enumerate(self.full_data[self.predicted_variable.get()].unique()):
             if value not in prelim_weights:
                 prelim_weights[value] = DoubleVar(value=1.0)
-            Label(weights_window, text=f"Percentage weight of variable \"{value}\"").grid(sticky=W + N + E, row=row, column=0, padx=5, pady=4)
+            Label(weights_window, text=f"Percentage weight of class \"{value}\"").grid(sticky=W + N + E, row=row, column=0, padx=5, pady=4)
             Entry(weights_window, textvariable=prelim_weights[value]).grid(sticky=W + N + E, row=row, column=1, padx=10, pady=4)
         else:
             Button(weights_window, text="Confirm", command=confirm, bg="#cccccc").grid(sticky=W + E, row=row+1, column=0, columnspan=4, padx=10, pady=(10, 0))
@@ -166,6 +166,7 @@ class GUI:
     def __restore_start_state(self):
         self.full_data = None
         self.features = []
+        self.weights = {}
 
         self.test_fraction_entry.config(state="disabled")
         self.test_fraction.set(0.0)
