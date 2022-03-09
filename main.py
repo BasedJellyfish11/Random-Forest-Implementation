@@ -41,7 +41,7 @@ def bag(data: pd.DataFrame, split_percent: float, use_balanced_tree: bool = Fals
 
 
 def create_tree(training_set: pd.DataFrame, bag_size: float, use_balanced_tree: bool, max_features: int,
-                predict_feature: str, tree_number: int = None,
+                predict_feature: str, weights: {}, tree_number: int = None,
                 tree_amount: int = None) -> Node:
     """
     Creates a decision tree to incorporate into the forest.
@@ -51,18 +51,19 @@ def create_tree(training_set: pd.DataFrame, bag_size: float, use_balanced_tree: 
     :param use_balanced_tree: If true, ensures the samples are picked so that there's an even distribution of the classes of predicted_feature in the bag.
     :param max_features: mtry, number of random features that the tree can test per split.
     :param predict_feature: Feature that the tree should try to predict.
+    :param weights: Weight of each of the predicted classes in the prediction.
     :param tree_number: Number of this tree in the forest. Used for user feedback in the form of a print.
     :param tree_amount: Total amount of trees in the forest. Used for user feedback in the form of a print.
     :return: The first Node of a Decision Tree
     """
-    return_node = Node(bag(training_set, bag_size, use_balanced_tree, predict_feature), max_features, predict_feature)
+    return_node = Node(bag(training_set, bag_size, use_balanced_tree, predict_feature), max_features, predict_feature, weights)
     if tree_number is not None and tree_amount is not None:
         print(f"Built tree number {tree_number + 1} out of {tree_amount}!")
     return return_node
 
 
 def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balanced_tree: bool, tree_amount: int,
-        max_features: int, predict_feature: str, positive_value: str, negative_value: str) -> None:
+        max_features: int, predict_feature: str, positive_value: str, negative_value: str, weights: {}) -> None:
     """
     Essentially a main: Creates a Random Forest according to parameters and runs it, printing out accuracy stats of the model.
 
@@ -75,6 +76,7 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
     :param predict_feature: Dependent variable to predict.
     :param positive_value: Value of the dependent variable that should be considered a positive case. Optional.
     :param negative_value: Value of the dependent variable that should be considered a negative case. Optional.
+    :param weights: Weight of each of the predicted classes.
     """
     stopwatch = time.perf_counter()
     training_set, test_set = split_data(full_data, train_frac)
@@ -91,7 +93,7 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
         # Since the only changing element is the tree number, we'll need to call repeat a lot
         starmap_args = zip(itertools.repeat(training_set), itertools.repeat(bag_size),
                            itertools.repeat(use_balanced_tree), itertools.repeat(max_features),
-                           itertools.repeat(predict_feature),
+                           itertools.repeat(predict_feature), itertools.repeat(weights),
                            range(0, tree_amount), itertools.repeat(tree_amount))
 
         random_forest = pool.starmap(create_tree, starmap_args)
@@ -101,23 +103,34 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
               sep=os.linesep)
 
     true_positives, true_negatives, false_positives, false_negatives, correct_hits = 0, 0, 0, 0, 0
+    weighted_true_positives, weighted_true_negatives, weighted_false_positives, weighted_false_negatives, weighted_correct_hits = 0, 0, 0, 0, 0
+
     confidence_store = {}
+    weighted_confidence_store = {}
     for row in test_set.itertuples():
 
         good_result = str(getattr(row, predict_feature))
         predictions = {}
+        weighted_predictions = {}
 
         # Making this run in parallel with the above Pool seemed to paradoxically make the program slower.
         # I assume this is because predicting is actually very light on operations (just going down a tree) which makes the overhead of creating a process not worth it
         for tree in random_forest:
-            prediction = str(tree.predict(row))
+            prediction, weighted_prediction = map(str, tree.predict(row))
+
             if prediction in predictions:
                 predictions[prediction] += 1
             else:
                 predictions[prediction] = 1
 
+            if weighted_prediction in weighted_predictions:
+                weighted_predictions[weighted_prediction] += 1
+            else:
+                weighted_predictions[weighted_prediction] = 1
+
         # After speaking to my thesis' advisor, we decided to make the predictions the majority class.
         final_prediction = max(predictions, key=predictions.get)
+        weighted_final_prediction = max(weighted_predictions, key=weighted_predictions.get)
 
         # Python 3.8 doesn't have pattern matching so this looks very good yep
         if final_prediction == good_result:
@@ -131,14 +144,28 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
         elif final_prediction == negative_value and good_result == positive_value:
             false_negatives += 1
 
-        print(f"Predicted {final_prediction} for sample {getattr(row, 'Index')}, true value was {good_result}",
+        if weighted_final_prediction == good_result:
+            weighted_correct_hits += 1
+        if weighted_final_prediction == positive_value and good_result == positive_value:
+            weighted_true_positives += 1
+        elif weighted_final_prediction == positive_value and good_result == negative_value:
+            weighted_false_positives += 1
+        elif weighted_final_prediction == negative_value and good_result == negative_value:
+            weighted_true_negatives += 1
+        elif weighted_final_prediction == negative_value and good_result == positive_value:
+            weighted_false_negatives += 1
+
+        print(f"Predicted {final_prediction} ({weighted_final_prediction} weighted) for sample {getattr(row, 'Index')}, true value was {good_result}",
               f"Prediction by tree was:",
-              os.linesep.join(f'{key}: {value/tree_amount:.5%}' for key,value in predictions.items()),
+              os.linesep.join(f'{key}: {value/tree_amount:.5%}' for key, value in predictions.items()),
+              f"Weighted prediction by tree was:",
+              os.linesep.join(f'{key}: {value/tree_amount:.5%}' for key, value in weighted_predictions.items()),
               "-----",
               sep=os.linesep)
 
         # Store how confident we were in each prediction in a variable to print the average confidence later
         confidence_store[getattr(row, "Index")] = predictions[final_prediction] / tree_amount
+        weighted_confidence_store[getattr(row, "Index")] = weighted_predictions[weighted_final_prediction] / tree_amount
 
     # These are all different accuracy indicators. They can be seen in https://en.wikipedia.org/wiki/Sensitivity_and_specificity
     true_positive_rate = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) != 0 \
@@ -159,6 +186,27 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
           f"{true_positives} True Positives, {false_positives} False Positives, {true_negatives} True Negatives, {false_negatives} False Negatives.",
           f"{true_positive_rate:.5%} True Positive Rate, ({false_negative_rate:.5%} False Negative Rate).",
           f"{true_negative_rate:.5%} True Negative Rate, ({false_positive_rate:.5%} False Positive Rate).",
+          sep=os.linesep
+          )
+
+    weighted_true_positive_rate = weighted_true_positives / (weighted_true_positives + weighted_false_negatives) if (weighted_true_positives + weighted_false_negatives) != 0 \
+        else float("NaN")
+    weighted_true_negative_rate = weighted_true_negatives / (weighted_false_positives + weighted_true_negatives) if (weighted_false_positives + weighted_true_negatives) != 0 \
+        else float("NaN")
+    weighted_false_positive_rate = weighted_false_positives / (weighted_false_positives + weighted_true_negatives) if (weighted_false_positives + weighted_true_negatives) != 0 \
+        else float("NaN")
+    weighted_false_negative_rate = weighted_false_negatives / (weighted_true_positives + weighted_false_negatives) if (weighted_true_positives + weighted_false_negatives) != 0 \
+        else float("NaN")
+
+    weighted_accuracy = weighted_correct_hits / len(test_set.index)
+    weighted_balanced_accuracy = (weighted_true_positive_rate + weighted_true_negative_rate) / 2
+
+    print(f"-----",
+          f"Weighted summary:",
+          f"{weighted_accuracy:.5%} Accuracy, {weighted_balanced_accuracy:.5%} Balanced Accuracy, {sum(weighted_confidence_store.values()) / len(test_set.index):.5%} Average Confidence",
+          f"{weighted_true_positives} True Positives, {weighted_false_positives} False Positives, {weighted_true_negatives} True Negatives, {weighted_false_negatives} False Negatives.",
+          f"{weighted_true_positive_rate:.5%} True Positive Rate, ({weighted_false_negative_rate:.5%} False Negative Rate).",
+          f"{weighted_true_negative_rate:.5%} True Negative Rate, ({weighted_false_positive_rate:.5%} False Positive Rate).",
           sep=os.linesep
           )
 

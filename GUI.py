@@ -47,6 +47,7 @@ class GUI:
         self.max_features = IntVar()
         self.positive_value = StringVar()
         self.negative_value = StringVar()
+        self.weights = {}
         self.possible_values = []
 
         # Actual GUI stuff.
@@ -104,8 +105,12 @@ class GUI:
         self.negative_value_menu.grid(sticky=W + E + N, row=row_number, column=2, columnspan=2, padx=10, pady=4)
         row_number += 1
 
+        self.assign_weights_button = Button(self.root, text="Assign weights to values", command=self.__assign_weights, bg="#cccccc", state="disabled")
+        self.assign_weights_button.grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10, pady=(20, 0))
+        row_number += 1
+
         self.start_button = Button(self.root, text="Start", command=self.__start_button_pressed, bg="#cccccc", state="disabled")
-        self.start_button.grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10, pady=(20, 0))
+        self.start_button.grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10)
         row_number += 1
 
         Button(self.root, text="Exit", command=self.__exit, bg="#cccccc").grid(sticky=W + E, row=row_number, column=0, columnspan=4, padx=10, pady=(0, 10))
@@ -118,6 +123,33 @@ class GUI:
 
         # Start the GUI
         self.root.mainloop()
+
+    def __assign_weights(self):
+        self.root.attributes('-disabled', 1)
+        weights_window = tk.Toplevel(self.root)
+        weights_window.transient(self.root)
+        weights_window.focus_set()
+        weights_window.grab_set()
+        weights_window.title = "Assign weights"
+        prelim_weights = {key: DoubleVar(value=value) for key, value in self.weights.items()}
+
+        def confirm():
+            self.weights = {key: value.get() for key, value in prelim_weights.items()}
+            weights_window.destroy()
+
+        row = 0
+        for row, value in enumerate(self.full_data[self.predicted_variable.get()].unique()):
+            if value not in prelim_weights:
+                prelim_weights[value] = DoubleVar(value=1.0)
+            Label(weights_window, text=f"Percentage weight of variable \"{value}\"").grid(sticky=W + N + E, row=row, column=0, padx=5, pady=4)
+            Entry(weights_window, textvariable=prelim_weights[value]).grid(sticky=W + N + E, row=row, column=1, padx=10, pady=4)
+        else:
+            Button(weights_window, text="Confirm", command=confirm, bg="#cccccc").grid(sticky=W + E, row=row+1, column=0, columnspan=4, padx=10, pady=(10, 0))
+            Button(weights_window, text="Exit", command=weights_window.destroy, bg="#cccccc").grid(sticky=W + E, row=row+2, column=0, columnspan=4, padx=10, pady=(0, 10))
+
+        self.root.wait_window(weights_window)
+        self.root.attributes('-disabled', 0)
+        self.root.focus_set()
 
     def __browsefunc(self):
         """Allows the user to find a path, displays it on the pathlabel, then enables the Parse button"""
@@ -197,10 +229,14 @@ class GUI:
     def __selected_feature_changed(self, *_):
         self.positive_value_menu['menu'].delete(0, 'end')
         self.negative_value_menu['menu'].delete(0, 'end')
+        self.weights = {}
 
         if self.full_data is None or self.predicted_variable.get() not in self.full_data.columns:
             self.possible_values = []
             self.start_button.config(state="disabled")
+            self.assign_weights_button.config(state="disabled")
+            self.positive_value_menu.config(state="disabled")
+            self.negative_value_menu.config(state="disabled")
         else:
             self.possible_values = self.full_data[self.predicted_variable.get()].unique()
             self.positive_value.set('')
@@ -215,6 +251,7 @@ class GUI:
                 return
             self.positive_value_menu.config(state="normal")
             self.negative_value_menu.config(state="normal")
+            self.assign_weights_button.config(state="normal")
             self.start_button.config(state="normal")
 
     def __start_button_pressed(self):
@@ -227,7 +264,7 @@ class GUI:
             main.run(self.full_data, self.test_fraction.get(), self.bag_fraction.get(), self.balanced_trees.get(),
                      self.tree_amount.get(),
                      self.max_features.get(), self.predicted_variable.get(), self.positive_value.get(),
-                     self.negative_value.get())
+                     self.negative_value.get(), self.weights)
         except Exception as e:
             print(f"An unexpected error occured: {e}")
 

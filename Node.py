@@ -111,7 +111,7 @@ def train_non_numeric(samples: pd.DataFrame, feature_to_train: str, feature_to_p
 
 class Node:
 
-    def __init__(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str):
+    def __init__(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str, weights: {}):
         """
         A Node is each of the components of a Decision Tree. However, since Nodes will have other Nodes attached to them, they can also be interpreted as start points for whole trees.
         Upon initializing a Node, it will train itself and develop a whole Decision Tree starting at it.
@@ -121,24 +121,31 @@ class Node:
         :param samples: The whole set of data to train the Node on, usually a bag made with replacement.
         :param feature_amount: The maximum amount of features that the tree starting at the Node may consider per split.
         :param feature_to_predict: The feature we aim to predict with this Decision Tree.
+        :param weights: Weight of each of the predicted classes in the prediction.
         """
         self.next_nodes: List[Node] = []
         self.majority_class = samples[feature_to_predict].mode().iat[0]  # After speaking to my thesis' advisor, we decided to make the predictions the majority class.
+
+        group_sizes = samples.groupby(feature_to_predict).size()
+        weighted_sizes = {key: group_sizes.get(key) * weight for key, weight in weights.items() if key in group_sizes}
+        self.weighted_majority_class = max(weighted_sizes, key=weighted_sizes.get)
+
         self.threshold = None
         self.feature = None  # We will need to store the feature we decided to split on, not just the threshold, for when we predict
 
         if feature_amount <= 0 or len(samples.columns) - 1 < feature_amount:
             raise ValueError("There are not enough features in the sample to consider")
 
-        self.train(samples, feature_amount, feature_to_predict)
+        self.train(samples, feature_amount, feature_to_predict, weights)
 
-    def train(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str):
+    def train(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str, weights: {}):
         """
         Trains the Node and creates a whole Decision Tree spanning from it, assuming that the Gini Impurity of this Node can be reduced.
 
         :param samples: The whole set of data to train the Node on, usually a bag made with replacement.
         :param feature_amount: The maximum amount of features that the tree starting at the Node may consider per split.
         :param feature_to_predict: The feature we aim to predict with this Decision Tree.
+        :param weights: Weight of each of the predicted classes in the prediction.
         """
 
         # We will follow Breiman's Random Forest, where the features that the tree might consider are chosen at random for every split (Breiman, Leo. “Random Forests” Machine learning 45.1 (2001): 5-32)
@@ -160,8 +167,8 @@ class Node:
                 self.feature, self.threshold = feature, threshold
 
         if best_gini < current_gini:
-            self.next_nodes += ([Node(next_set_1, feature_amount, feature_to_predict),
-                                 Node(next_set_2, feature_amount, feature_to_predict)])
+            self.next_nodes += ([Node(next_set_1, feature_amount, feature_to_predict, weights),
+                                 Node(next_set_2, feature_amount, feature_to_predict, weights)])
 
     def predict(self, sample: tuple):
         """
@@ -172,7 +179,7 @@ class Node:
         :return: A prediction for the value this row should take according to the Decision Tree's previous training
         """
         if not self.next_nodes:
-            return self.majority_class
+            return self.majority_class, self.weighted_majority_class
 
         if isinstance(getattr(sample, self.feature), numbers.Number):
             return self.next_nodes[0].predict(sample) if getattr(sample, self.feature) <= self.threshold else self.next_nodes[1].predict(sample)
