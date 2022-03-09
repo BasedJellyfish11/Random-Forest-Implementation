@@ -111,7 +111,7 @@ def train_non_numeric(samples: pd.DataFrame, feature_to_train: str, feature_to_p
 
 class Node:
 
-    def __init__(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str, weights: {}):
+    def __init__(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str, weights: {}, minimum_node_size: int):
         """
         A Node is each of the components of a Decision Tree. However, since Nodes will have other Nodes attached to them, they can also be interpreted as start points for whole trees.
         Upon initializing a Node, it will train itself and develop a whole Decision Tree starting at it.
@@ -129,6 +129,8 @@ class Node:
         group_sizes = samples.groupby(feature_to_predict).size()
         weighted_sizes = {key: group_sizes.get(key) * weight for key, weight in weights.items() if key in group_sizes}
         self.weighted_majority_class = max(weighted_sizes, key=weighted_sizes.get) if weighted_sizes else self.majority_class
+        if len(samples.index) <= minimum_node_size:
+            return
 
         self.threshold = None
         self.feature = None  # We will need to store the feature we decided to split on, not just the threshold, for when we predict
@@ -136,9 +138,9 @@ class Node:
         if feature_amount <= 0 or len(samples.columns) - 1 < feature_amount:
             raise ValueError("There are not enough features in the sample to consider")
 
-        self.train(samples, feature_amount, feature_to_predict, weights)
+        self.train(samples, feature_amount, feature_to_predict, weights, minimum_node_size)
 
-    def train(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str, weights: {}):
+    def train(self, samples: pd.DataFrame, feature_amount: int, feature_to_predict: str, weights: {}, minimum_node_size: int):
         """
         Trains the Node and creates a whole Decision Tree spanning from it, assuming that the Gini Impurity of this Node can be reduced.
 
@@ -167,8 +169,8 @@ class Node:
                 self.feature, self.threshold = feature, threshold
 
         if best_gini < current_gini:
-            self.next_nodes += ([Node(next_set_1, feature_amount, feature_to_predict, weights),
-                                 Node(next_set_2, feature_amount, feature_to_predict, weights)])
+            self.next_nodes += ([Node(next_set_1, feature_amount, feature_to_predict, weights, minimum_node_size),
+                                 Node(next_set_2, feature_amount, feature_to_predict, weights, minimum_node_size)])
 
     def predict(self, sample: tuple):
         """

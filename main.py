@@ -41,7 +41,7 @@ def bag(data: pd.DataFrame, split_percent: float, use_balanced_tree: bool = Fals
 
 
 def create_tree(training_set: pd.DataFrame, bag_size: float, use_balanced_tree: bool, max_features: int,
-                predict_feature: str, weights: {}, tree_number: int = None,
+                predict_feature: str, weights: {}, minimum_node_size: int, tree_number: int = None,
                 tree_amount: int = None) -> Node:
     """
     Creates a decision tree to incorporate into the forest.
@@ -52,18 +52,19 @@ def create_tree(training_set: pd.DataFrame, bag_size: float, use_balanced_tree: 
     :param max_features: mtry, number of random features that the tree can test per split.
     :param predict_feature: Feature that the tree should try to predict.
     :param weights: Weight of each of the predicted classes in the prediction.
+    :param minimum_node_size: Minimum size a Node should have to consider further splits
     :param tree_number: Number of this tree in the forest. Used for user feedback in the form of a print.
     :param tree_amount: Total amount of trees in the forest. Used for user feedback in the form of a print.
     :return: The first Node of a Decision Tree
     """
-    return_node = Node(bag(training_set, bag_size, use_balanced_tree, predict_feature), max_features, predict_feature, weights)
+    return_node = Node(bag(training_set, bag_size, use_balanced_tree, predict_feature), max_features, predict_feature, weights, minimum_node_size)
     if tree_number is not None and tree_amount is not None:
         print(f"Built tree number {tree_number + 1} out of {tree_amount}!")
     return return_node
 
 
 def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balanced_tree: bool, tree_amount: int,
-        max_features: int, predict_feature: str, positive_value: str, negative_value: str, weights: {}) -> None:
+        max_features: int, predict_feature: str, positive_value: str, negative_value: str, weights: {}, minimum_node_size: int) -> None:
     """
     Essentially a main: Creates a Random Forest according to parameters and runs it, printing out accuracy stats of the model.
 
@@ -77,6 +78,7 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
     :param positive_value: Value of the dependent variable that should be considered a positive case. Optional.
     :param negative_value: Value of the dependent variable that should be considered a negative case. Optional.
     :param weights: Weight of each of the predicted classes.
+    :param minimum_node_size: Minimum size a Node should have to consider further splits
     """
     stopwatch = time.perf_counter()
     training_set, test_set = split_data(full_data, train_frac)
@@ -93,7 +95,7 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
         # Since the only changing element is the tree number, we'll need to call repeat a lot
         starmap_args = zip(itertools.repeat(training_set), itertools.repeat(bag_size),
                            itertools.repeat(use_balanced_tree), itertools.repeat(max_features),
-                           itertools.repeat(predict_feature), itertools.repeat(weights),
+                           itertools.repeat(predict_feature), itertools.repeat(weights), itertools.repeat(minimum_node_size),
                            range(0, tree_amount), itertools.repeat(tree_amount))
 
         random_forest = pool.starmap(create_tree, starmap_args)

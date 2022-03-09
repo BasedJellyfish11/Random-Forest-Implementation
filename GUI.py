@@ -48,6 +48,7 @@ class GUI:
         self.positive_value = StringVar()
         self.negative_value = StringVar()
         self.weights = {}
+        self.minimum_node_size = IntVar()
         self.possible_values = []
 
         # Actual GUI stuff.
@@ -85,6 +86,11 @@ class GUI:
         Label(self.root, text="Number of features to consider per split").grid(sticky=W + N + E, row=row_number, column=0, columnspan=2, padx=5, pady=4)
         self.max_features_entry = Entry(self.root, textvariable=self.max_features, state="readonly")
         self.max_features_entry.grid(sticky=W + N + E, row=row_number, column=2, columnspan=2, padx=10, pady=4)
+        row_number += 1
+
+        Label(self.root, text="Minimum node size for a split to be considered").grid(sticky=W + N + E, row=row_number, column=0, columnspan=2, padx=5, pady=4)
+        self.minimum_node_size_entry = Entry(self.root, textvariable=self.minimum_node_size, state="readonly")
+        self.minimum_node_size_entry.grid(sticky=W + N + E, row=row_number, column=2, columnspan=2, padx=10, pady=4)
         row_number += 1
 
         Label(self.root, text="Predicted variable").grid(sticky=W + N + E, row=row_number, column=0, columnspan=2, padx=5, pady=4)
@@ -141,11 +147,15 @@ class GUI:
         for row, value in enumerate(self.full_data[self.predicted_variable.get()].unique()):
             if value not in prelim_weights:
                 prelim_weights[value] = DoubleVar(value=1.0)
-            Label(weights_window, text=f"Percentage weight of class \"{value}\"").grid(sticky=W + N + E, row=row, column=0, padx=5, pady=4)
-            Entry(weights_window, textvariable=prelim_weights[value]).grid(sticky=W + N + E, row=row, column=1, padx=10, pady=4)
+            Label(weights_window, text=f"Percentage weight of class \"{value}\"").grid(sticky=W + N + E, row=row+1, column=0, padx=5, pady=4)
+            Entry(weights_window, textvariable=prelim_weights[value]).grid(sticky=W + N + E, row=row+1, column=1, padx=10, pady=4)
         else:
-            Button(weights_window, text="Confirm", command=confirm, bg="#cccccc").grid(sticky=W + E, row=row+1, column=0, columnspan=4, padx=10, pady=(10, 0))
-            Button(weights_window, text="Exit", command=weights_window.destroy, bg="#cccccc").grid(sticky=W + E, row=row+2, column=0, columnspan=4, padx=10, pady=(0, 10))
+            Button(weights_window, text="Confirm", command=confirm, bg="#cccccc").grid(sticky=W + E, row=row+2, column=0, columnspan=2, padx=10, pady=(10, 0))
+            Button(weights_window, text="Exit", command=weights_window.destroy, bg="#cccccc").grid(sticky=W + E, row=row+3, column=0, columnspan=2, padx=10, pady=(0, 10))
+            for current_row in range(row+3):
+                Grid.rowconfigure(weights_window, current_row, weight=1)
+            for column in range(2):
+                Grid.columnconfigure(weights_window, column, weight=1)
 
         self.root.wait_window(weights_window)
         self.root.attributes('-disabled', 0)
@@ -183,6 +193,9 @@ class GUI:
         self.max_features_entry.config(state="disabled")
         self.max_features.set(0)
 
+        self.minimum_node_size_entry.config(state="disabled")
+        self.minimum_node_size.set(0)
+
         self.predicted_variable.set('')
         self.positive_value.set('')
         self.negative_value.set('')
@@ -218,6 +231,9 @@ class GUI:
 
             self.max_features_entry.config(state="normal")
             self.max_features.set(int(math.sqrt(len(self.features))))
+
+            self.minimum_node_size_entry.config(state="normal")
+            self.minimum_node_size.set(0)
 
             self.predicted_variable_menu.config(state="normal")
             for feature in self.features:
@@ -265,7 +281,7 @@ class GUI:
             main.run(self.full_data, self.test_fraction.get(), self.bag_fraction.get(), self.balanced_trees.get(),
                      self.tree_amount.get(),
                      self.max_features.get(), self.predicted_variable.get(), self.positive_value.get(),
-                     self.negative_value.get(), self.weights)
+                     self.negative_value.get(), self.weights, self.minimum_node_size.get())
         except Exception as e:
             print(f"An unexpected error occured: {e}")
 
