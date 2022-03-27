@@ -1,10 +1,11 @@
-import itertools, os, time
-from multiprocessing import Pool, freeze_support
-
+import itertools
+import os
+import time
+from multiprocessing import Pool
+import sys
 import pandas as pd
 
 from Node import Node
-import GUI
 
 
 def split_data(data: pd.DataFrame, split_percent: float) -> (pd.DataFrame, pd.DataFrame):
@@ -220,5 +221,14 @@ def run(full_data: pd.DataFrame, train_frac: float, bag_size: float, use_balance
 # Launch the GUI and let it do work
 
 if __name__ == '__main__':
-    freeze_support()  # On Windows calling this function is necessary if we mean to use pyinstaller or other freezers
-    GUI.GUI()  # run will be called from the GUI
+    data = pd.read_csv(sys.argv[1])
+    if data.isnull().values.any():
+        data.dropna(inplace=True)
+        print("NA values were found and automatically dropped")
+    data.columns = [str(x).upper().replace(" ", "_") for x in data.columns]
+    tree_amount = int(sys.argv[2])
+    feature_amount = int(sys.argv[3])
+    predicted = sys.argv[4]
+    positive = sys.argv[5]
+    negative = sys.argv[6]
+    run(data, 0.8, 1, False, tree_amount, feature_amount, predicted, positive, negative, {}, 0)
