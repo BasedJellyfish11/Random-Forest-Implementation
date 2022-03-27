@@ -4,3 +4,7 @@ venv
 build
 dist
 main.spec
+.Rproj.user
+.Rhistory
+/renv
+renv.lock
